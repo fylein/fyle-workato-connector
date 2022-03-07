@@ -13,7 +13,9 @@
 # Used by dotenv library to load environment variables.
 # .env
 
+# credentials
 settings.yaml
+setup.sh
 
 # Ignore Byebug command history file.
 .byebug_history
