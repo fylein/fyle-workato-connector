@@ -1,3 +1,4 @@
+
 {
   title: "Fyle",
   connection: {
@@ -13,35 +14,33 @@
       end,
 
       client_id: lambda do
-        "FYLE_CLIENT_ID"
+        account_property('FYLE_CLIENT_ID')
       end,
 
       client_secret: lambda do
-        "FYLE_CLIENT_SECRET"
-      end,
-      
-      base_uri: lambda do
-        "https://staging.fyle.tech/platform/v1beta"
+        account_property('FYLE_CLIENT_SECRET')
       end,
 
       apply: lambda do |connection, access_token|
-        headers("Authorization": "Bearer #{access_token}")
+        headers("Authorization": "OAuth2 #{access_token}")
       end,
-
-      refresh_on: [401, 403],
-
+      
+      detect_on: ['401 Authorization Required'],
+      
+      refresh_on: [401, 403, '401 Authorization Required'],
+       
       refresh: lambda do |connection, refresh_token|
+        
         response = post("https://accounts.fyle.tech/api/oauth/token").
-                      payload(
-                        grant_type: "refresh_token",
-                        client_id: connection["client_id"],
-                        client_secret: connection["client_secret"],
-                        refresh_token: refresh_token
-                      )
+          payload(
+            grant_type: "refresh_token",
+            client_id: connection["client_id"],
+            client_secret: connection["client_secret"],
+            refresh_token: refresh_token
+          )
         [
-          {
+          { # This hash is for your tokens
             access_token: response["access_token"],
-            refresh_token: response["refresh_token"]
           }
         ]   
       end,
@@ -894,7 +893,10 @@
   actions: {
     get_list_of_expenses: {
       execute: lambda do |connection, input|
-        expenses = get("https://staging.fyle.tech/platform/v1beta/admin/expenses")["data"]
+        expenses = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").params(
+          'state': 'eq.PAYMENT_PROCESSING',
+          'order': 'updated_at.asc'
+        )["data"]
         flattened_expenses = call(:flatten_expenses, expenses)
       end,
       output_fields: lambda do |object_definitions|
@@ -974,7 +976,144 @@
       end
     }
   },
-  triggers: {},
+
+  triggers: {
+    poll_cost_center: {
+      title: 'New/Updated Cost Center',
+
+      subtitle: "Triggers when a Cost Center is created or " \
+      "updated in Fyle",
+      
+      description: lambda do |input, picklist_label|
+        "New/updated <span class='provider'>Cost Center</span> " \
+        "in <span class='provider'>Fyle</span>"
+      end,
+
+      help: "Creates a job when cost centers are created or " \
+      "updated in Fyle. Each cost center creates a separate job.",
+      
+      input_fields: lambda do |object_definitions|
+        [
+          {
+            name: 'since',
+            label: 'When first started, this recipe should pick up events from',
+            type: 'timestamp',
+            optional: true,
+            sticky: true,
+            hint: 'When you start recipe for the first time, it picks up ' \
+              'trigger events from this specified date and time. Defaults to ' \
+              'the current time.'
+          }
+        ]
+      end,
+      
+      poll: lambda do |connection, input, closure, _eis, _eos|
+        
+        closure = {} unless closure.present?
+        limit = 100
+        
+        updated_since = (closure['cursor'] || input['since'] || Time.now ).to_time.utc.iso8601
+        
+
+        cost_center = get("https://staging.fyle.tech/platform/v1beta/admin/cost_centers").
+                  params(
+                    'order': 'updated_at.asc',
+                  )
+  
+        closure['cursor'] = cost_center['data'].last['updated_at'] unless cost_center.blank?
+        
+        {
+          events: cost_center,
+          next_poll: closure,
+          can_poll_more: false
+        }
+        
+      end,
+      
+      dedup: lambda do |record|
+        "#{record['data'].last['id']}@#{record['data'].last['created_at']}"
+      end,
+       output_fields: lambda do |object_definitions|
+          [
+            {
+              name: "data",
+              label: "Cost Centers",
+              type: :array,
+              of: :object,
+              properties: object_definitions["cost_center"]
+            }
+          ]
+      end
+    },  
+    poll_expenses: {
+      title: 'New Expense',
+
+      subtitle: "Triggers when a expense is created " \
+      "in Fyle",
+      
+      description: lambda do |input, picklist_label|
+        "New<span class='provider'>Expense</span> " \
+        "in <span class='provider'>Fyle</span>"
+      end,
+
+      help: "Creates a job when Expense are created " \
+      "in Fyle. Each Expense creates a separate job.",
+      
+      input_fields: lambda do |object_definitions|
+        [
+          {
+            name: 'since',
+            label: 'When first started, this recipe should pick up events from',
+            type: 'timestamp',
+            optional: true,
+            sticky: true,
+            hint: 'When you start recipe for the first time, it picks up ' \
+              'trigger events from this specified date and time. Defaults to ' \
+              'the current time.'
+          }
+        ]
+      end,
+      
+      poll: lambda do |connection, input, closure, _eis, _eos|
+        
+        closure = {} unless closure.present?
+        limit = 100
+        
+        updated_since = (closure['cursor'] || input['since'] || Time.now ).to_time.utc.iso8601
+        
+
+        expenses = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").
+                  params(
+                    'state': 'eq.PAYMENT_PROCESSING',
+                    'order': 'updated_at.asc'
+                  )
+  
+        closure['cursor'] = expenses['data'].last['updated_at'] unless expenses.blank?
+        
+        {
+          events: expenses,
+          next_poll: closure,
+          can_poll_more: false
+        }
+        
+      end,
+      
+      dedup: lambda do |record|
+        "#{record['data'].last['id']}@#{record['data'].last['created_at']}"
+      end,
+       output_fields: lambda do |object_definitions|
+          [
+            {
+              name: "data",
+              label: "Expense",
+              type: :array,
+              of: :object,
+              properties: object_definitions["expense"]
+            }
+          ]
+      end
+    },
+  },
   pick_lists: {},
   methods: {
     flatten_expenses: lambda do |input|
