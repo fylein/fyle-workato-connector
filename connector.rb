@@ -1,16 +1,23 @@
-
 {
-  title: "Fyle",
+  title: "Fyle Test Connector",
+ 
+
+  # API key authentication example. See more examples at https://docs.workato.com/developing-connectors/sdk/guides/authentication.html
   connection: {
     authorization: {
-      type: "oauth2",
 
+      type: "oauth2",
+      
       authorization_url: lambda do
         "https://accounts.fyle.tech/app/developers/%23/oauth/authorize"
       end,
 
       token_url: lambda do
         "https://accounts.fyle.tech/api/oauth/token"
+      end,
+
+      base_uri: lambda do
+        account_property('FYLE_BASE_URL')
       end,
 
       client_id: lambda do
@@ -22,13 +29,11 @@
       end,
 
       apply: lambda do |connection, access_token|
-        headers("Authorization": "OAuth2 #{access_token}")
+        headers("Authorization": "Bearer #{access_token}")
       end,
-      
-      detect_on: ['401 Authorization Required'],
-      
+            
       refresh_on: [401, 403, '401 Authorization Required'],
-       
+ 
       refresh: lambda do |connection, refresh_token|
         
         response = post("https://accounts.fyle.tech/api/oauth/token").
@@ -44,8 +49,9 @@
           }
         ]   
       end,
-    }
+    },
   },
+
   object_definitions: {
     user: {
       fields: lambda do |connection, config_fields|
@@ -66,67 +72,13 @@
       fields: lambda do |connection, config_fields|
         [
           {
-            "control_type": "number",
-            "label": "ID",
-            "parse_output": "float_conversion",
-            "type": "number",
             "name": "id"
           },
           {
-            "control_type": "text",
-            "label": "Name",
-            "type": "string",
             "name": "name"
           },
           {
-            "control_type": "text",
-            "label": "Code",
-            "type": "string",
             "name": "code"
-          },
-          {
-            "control_type": "text",
-            "label": "Description",
-            "type": "string",
-            "name": "description"
-          },
-          {
-            "control_type": "text",
-            "label": "Is enabled",
-            "render_input": {},
-            "parse_output": {},
-            "toggle_hint": "Select from option list",
-            "toggle_field": {
-              "label": "Is enabled",
-              "control_type": "text",
-              "toggle_hint": "Use custom value",
-              "type": "boolean",
-              "name": "is_enabled"
-            },
-            "type": "boolean",
-            "name": "is_enabled"
-          },
-          {
-            "control_type": "text",
-            "label": "Org ID",
-            "type": "string",
-            "name": "org_id"
-          },
-          {
-            "control_type": "text",
-            "label": "Created at",
-            "render_input": "date_time_conversion",
-            "parse_output": "date_time_conversion",
-            "type": "date_time",
-            "name": "created_at"
-          },
-          {
-            "control_type": "text",
-            "label": "Updated at",
-            "render_input": "date_time_conversion",
-            "parse_output": "date_time_conversion",
-            "type": "date_time",
-            "name": "updated_at"
           }
         ]
       end
@@ -890,33 +842,15 @@
       end
     }
   },
+
   actions: {
-    get_list_of_expenses: {
-      execute: lambda do |connection, input|
-        expenses = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").params(
-          'state': 'eq.PAYMENT_PROCESSING',
-          'order': 'updated_at.asc'
-        )["data"]
-        flattened_expenses = call(:flatten_expenses, expenses)
-      end,
-      output_fields: lambda do |object_definitions|
-       [
-          {
-            name: "data",
-            label: "Expenses",
-            type: :array,
-            of: :object,
-            properties: object_definitions["expense"]
-          }
-        ]
-      end
-    },
     get_list_of_categories: {
+    
       execute: lambda do |connection, input|
         categories = get("https://staging.fyle.tech/platform/v1beta/admin/categories")
       end,
       output_fields: lambda do |object_definitions|
-       [
+        [
           {
             name: "data",
             label: "Categories",
@@ -927,56 +861,67 @@
         ]
       end
     },
-    get_list_of_projects: {
-      execute: lambda do |connection, input|
-        projects = get("https://staging.fyle.tech/platform/v1beta/admin/projects")
+    get_list_of_expenses: {
+      
+      input_fields: lambda do
+          [
+            { 
+              name: 'state', 
+              type: :string, 
+              optional: false 
+            },
+            {
+              name: 'order',
+              type: :string,
+              optional: false
+            },
+            {
+              name: 'updated_at',
+              type: :string,
+              optional: false
+            },
+            {
+              name: 'exported',
+              type: :string,
+              optional: false
+            }
+          ]
+      end,
+ 
+      execute: lambda do |connection, input_fields|
+        expenses = call(:paginated_get_all, input_fields)
+       
       end,
       output_fields: lambda do |object_definitions|
-       [
+        [
           {
             name: "data",
-            label: "Projects",
+            label: "Expenses",
             type: :array,
             of: :object,
-            properties: object_definitions["project"]
+            properties: object_definitions["expense"]
           }
         ]
       end
     },
     get_list_of_cost_centers: {
-      execute: lambda do |connection, input|
-        projects = get("https://staging.fyle.tech/platform/v1beta/admin/cost_centers")
-      end,
-      output_fields: lambda do |object_definitions|
-       [
-          {
-            name: "data",
-            label: "Cost Centers",
-            type: :array,
-            of: :object,
-            properties: object_definitions["cost_center"]
-          }
-        ]
-      end
+        execute: lambda do |connection, input|
+          categories = get("https://staging.fyle.tech/platform/v1beta/admin/cost_centers")
+        end,
+        output_fields: lambda do |object_definitions|
+          [
+            {
+              name: "data",
+              label: "Cost Centers",
+              type: :array,
+              of: :object,
+              properties: object_definitions["cost_center"]
+            }
+          ]
+        end
     },
-    get_list_of_corporate_cards: {
-      execute: lambda do |connection, input|
-        corporate_cards = get("https://staging.fyle.tech/platform/v1beta/admin/corporate_cards")
-      end,
-      output_fields: lambda do |object_definitions|
-       [
-          {
-            name: "data",
-            label: "Corporate Cards",
-            type: :array,
-            of: :object,
-            properties: object_definitions["corporate_card"]
-          }
-        ]
-      end
-    }
-  },
-
+    
+ },
   triggers: {
     poll_cost_center: {
       title: 'New/Updated Cost Center',
@@ -1046,18 +991,18 @@
       end
     },  
     poll_expenses: {
-      title: 'New Expense',
+      title: 'New/Updated Expense',
 
-      subtitle: "Triggers when a expense is created " \
-      "in Fyle",
+      subtitle: "Triggers when a expense is created or " \
+      "updated in Fyle",
       
       description: lambda do |input, picklist_label|
-        "New<span class='provider'>Expense</span> " \
+        "New/updated <span class='provider'>Cost Center</span> " \
         "in <span class='provider'>Fyle</span>"
       end,
 
-      help: "Creates a job when Expense are created " \
-      "in Fyle. Each Expense creates a separate job.",
+      help: "Creates a job when cost centers are created or " \
+      "updated in Fyle. Each cost center creates a separate job.",
       
       input_fields: lambda do |object_definitions|
         [
@@ -1113,75 +1058,116 @@
           ]
       end
     },
+    
   },
-  pick_lists: {},
+
+  pick_lists: {
+  },
+
+  # Reusable methods can be called from object_definitions, picklists or actions
+  # See more at https://docs.workato.com/developing-connectors/sdk/sdk-reference/methods.html
   methods: {
     flatten_expenses: lambda do |input|
       flattened_expenses = []
       input.each { |expense|
         flattened_expenses.push({
-          id: expense["id"],
-          user_id: expense["user_id"],
-          user_email: expense["user"]["email"],
-          user_full_name: expense["user"]["full_name"],
-          org_id: expense["org_id"],
-          created_at: expense["created_at"],
-          updated_at: expense["updated_at"],
-          spent_at: expense["spent_at"],
-          source: expense["source"],
-          merchant_id: expense["merchant_id"],
-          currency_code: expense["currency_code"],
-          amount: expense["amount"],
-          foreign_currency: expense["foreign_currency"],
-          foreign_amount: expense["foreign_amount"],
-          purpose: expense["purpose"],
-          cost_center_id: expense["cost_center_id"],
-          cost_center_name: expense["cost_center"] ? expense["cost_center"]["name"] : nil,
-          cost_center_code: expense["cost_center"] ? expense["cost_center"]["code"] : nil,
-          category_id: expense["category_id"],
-          category_name: expense["category"] ? expense["category"]["name"] : nil,
-          sub_category: expense["category"] ? expense["category"]["sub_category"] : nil,
-          categor_code: expense["category"] ? expense["category"]["code"] : nil,
-          project_id: expense["project_id"],
-          project_name: expense["project"] ? expense["project"]["name"] : nil,
-          project_code: expense["project"] ? expense["project"]["code"] : nil,
-          sub_project: expense["project"] ? expense["project"]["sub_project"] : nil,
-          source_account_id: expense["source_account_id"],
-          source_account_type: expense["source_account"] ? expense["source_account"]["type"] : nil,
-          tax_amount: expense["tax_amount"],
-          tax_group_id: expense["tax_group_id"],
-          is_billable: expense["is_billable"],
-          is_reimbursable: expense["is_reimbursable"],
-          state: expense["state"],
-          expense_number: expense["seq_num"],
-          added_to_report_at: expense["added_to_report_at"],
-          report_id: expense["report_id"],
-          report_last_approved_at: expense["report"] ? expense["report"]["last_approved_at"] : nil,
-          report_last_submitted_at: expense["report"] ? expense["report"]["last_submitted_at"] : nil,
-          report_number: expense["report"] ? expense["report"]["seq_num"] : nil,
-          report_title: expense["report"] ? expense["report"]["title"] : nil,
-          report_state: expense["report"] ? expense["report"]["state"] : nil,
-          settlement_id: expense["report"] ? expense["report"]["settlement_id"] : nil,
-          report_last_paid_at: expense["report"] ? expense["report"]["last_paid_at"] : nil,
-          is_verified: expense["is_verified"],
-          last_verified_at: expense["last_verified_at"],
-          is_exported: expense["is_exported"],
-          last_exported_at: expense["last_exported_at"],
-          employee_id: expense["employee_id"],
-          employee_code: expense["employee"]["code"],
-          employee_department_id: expense["employee"]["department"] ? expense["employee"]["department"]["id"] : nil,
-          employee_department_code: expense["employee"]["department"] ? expense["employee"]["department"]["code"] : nil,
-          employee_department_name: expense["employee"]["department"] ? expense["employee"]["department"]["name"] : nil,
-          employee_sub_department_name: expense["employee"]["department"] ? expense["employee"]["department"]["sub_department"] : nil,
-          is_corporate_card_transaction_auto_matched: expense["is_corporate_card_transaction_auto_matched"],
-          corporate_card_id: expense["matched_corporate_card_transactions"][0] ? expense["matched_corporate_card_transactions"][0]["corporate_card_id"] : nil,
-          corporate_card_number: expense["matched_corporate_card_transactions"][0] ? expense["matched_corporate_card_transactions"][0]["corporate_card_number"] : nil,
-          last_settled_at: expense["last_settled_at"]
+          id: expense['id'],
+          user_id: expense['user_id'],
+          user_email: expense['user']['email'],
+          user_full_name: expense['user']['full_name'],
+          org_id: expense['org_id'],
+          created_at: expense['created_at'],
+          updated_at: expense['updated_at'],
+          spent_at: expense['spent_at'],
+          source: expense['source'],
+          merchant_id: expense['merchant_id'],
+          currency_code: expense['currency_code'],
+          amount: expense['amount'],
+          foreign_currency: expense['foreign_currency'],
+          foreign_amount: expense['foreign_amount'],
+          purpose: expense['purpose'],
+          cost_center_id: expense['cost_center_id'],
+          cost_center_name: expense['cost_center'] ? expense['cost_center']['name'] : nil,
+          cost_center_code: expense['cost_center'] ? expense['cost_center']['code'] : nil,
+          category_id: expense['category_id'],
+          category_name: expense['category'] ? expense['category']['name'] : nil,
+          sub_category: expense['category'] ? expense['category']['sub_category'] : nil,
+          categor_code: expense['category'] ? expense['category']['code'] : nil,
+          project_id: expense['project_id'],
+          project_name: expense['project'] ? expense['project']['name'] : nil,
+          project_code: expense['project'] ? expense['project']['code'] : nil,
+          sub_project: expense['project'] ? expense['project']['sub_project'] : nil,
+          source_account_id: expense['source_account_id'],
+          source_account_type: expense['source_account'] ? expense['source_account']['type'] : nil,
+          tax_amount: expense['tax_amount'],
+          tax_group_id: expense['tax_group_id'],
+          is_billable: expense['is_billable'],
+          is_reimbursable: expense['is_reimbursable'],
+          state: expense['state'],
+          expense_number: expense['seq_num'],
+          added_to_report_at: expense['added_to_report_at'],
+          report_id: expense['report_id'],
+          report_last_approved_at: expense['report'] ? expense['report']['last_approved_at'] : nil,
+          report_last_submitted_at: expense['report'] ? expense['report']['last_submitted_at'] : nil,
+          report_number: expense['report'] ? expense['report']['seq_num'] : nil,
+          report_title: expense['report'] ? expense['report']['title'] : nil,
+          report_state: expense['report'] ? expense['report']['state'] : nil,
+          settlement_id: expense['report'] ? expense['report']['settlement_id'] : nil,
+          report_last_paid_at: expense['report'] ? expense['report']['last_paid_at'] : nil,
+          is_verified: expense['is_verified'],
+          last_verified_at: expense['last_verified_at'],
+          is_exported: expense['is_exported'],
+          last_exported_at: expense['last_exported_at'],
+          employee_id: expense['employee_id'],
+          employee_code: expense['employee']['code'],
+          employee_department_id: expense['employee']['department'] ? expense['employee']['department']['id'] : nil,
+          employee_department_code: expense['employee']['department'] ? expense['employee']['department']['code'] : nil,
+          employee_department_name: expense['employee']['department'] ? expense['employee']['department']['name'] : nil,
+          employee_sub_department_name: expense['employee']['department'] ? expense['employee']['department']['sub_department'] : nil,
+          is_corporate_card_transaction_auto_matched: expense['is_corporate_card_transaction_auto_matched'],
+          corporate_card_id: expense['matched_corporate_card_transactions'][0] ? expense['matched_corporate_card_transactions'][0]['corporate_card_id'] : nil,
+          corporate_card_number: expense['matched_corporate_card_transactions'][0] ? expense['matched_corporate_card_transactions'][0]['corporate_card_number'] : nil,
+          last_settled_at: expense['last_settled_at']
         })
       }
       {
         data: flattened_expenses
       }
+    end,
+    
+    paginated_get_all: lambda do |input|
+      count = 1
+      total_count = 0
+      results = []
+      
+      query_params = {
+        order: 'updated_at.asc'
+      }
+
+      while total_count < count  do
+        response = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").params(
+          query_params
+        )
+        
+        data_size = response['data'].length()
+        total_count = total_count + data_size
+        count = response['count']
+        
+        query_params = {
+           order: 'updated_at.asc',
+          
+          'offset': total_count, 
+          'limit': data_size
+        }
+        
+        results = results + response['data']
+     
+      end
+      flattened_expenses = call(:flatten_expenses, results)
+      
+      flattened_expenses
+      
     end
+      
   }
 }
