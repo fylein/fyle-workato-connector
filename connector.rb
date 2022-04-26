@@ -1,5 +1,5 @@
 {
-  title: "Fyle Test Connector",
+  title: 'Fyle Production',
  
 
   # API key authentication example. See more examples at https://docs.workato.com/developing-connectors/sdk/guides/authentication.html
@@ -7,47 +7,42 @@
     authorization: {
 
       type: "oauth2",
-      
+
       authorization_url: lambda do
-        "https://accounts.fyle.tech/app/developers/%23/oauth/authorize"
+        'https://accounts.fylehq.com/app/developers/%23/oauth/authorize'
       end,
 
       token_url: lambda do
-        "https://accounts.fyle.tech/api/oauth/token"
+        'https://accounts.fylehq.com/api/oauth/token'
       end,
 
-      base_uri: lambda do
-        account_property('FYLE_BASE_URL')
+      base_uri: lambda do |connection|
+        account_property('PRODUCTION_BASE_URL')
       end,
 
-      client_id: lambda do
-        account_property('FYLE_CLIENT_ID')
+      client_id: lambda do |connection|
+        account_property('PRIODUCTION_CLIENT_ID')
       end,
 
-      client_secret: lambda do
-        account_property('FYLE_CLIENT_SECRET')
+      client_secret: lambda do |connection|
+        account_property('PRODUCTION_CLIENT_SECRET')
       end,
 
       apply: lambda do |connection, access_token|
         headers("Authorization": "Bearer #{access_token}")
       end,
-            
+
       refresh_on: [401, 403, '401 Authorization Required'],
  
       refresh: lambda do |connection, refresh_token|
-        
-        response = post("https://accounts.fyle.tech/api/oauth/token").
+
+        response = post('https://accounts.fylehq.com/api/oauth/token').
           payload(
-            grant_type: "refresh_token",
-            client_id: connection["client_id"],
-            client_secret: connection["client_secret"],
+            grant_type: 'refresh_token',
+            client_id: account_property('PRIODUCTION_CLIENT_ID'),
+            client_secret: account_property('PRODUCTION_CLIENT_SECRET'),
             refresh_token: refresh_token
           )
-        [
-          { # This hash is for your tokens
-            access_token: response["access_token"],
-          }
-        ]   
       end,
     },
   },
@@ -847,16 +842,16 @@
     get_list_of_categories: {
     
       execute: lambda do |connection, input|
-        categories = get("https://staging.fyle.tech/platform/v1beta/admin/categories")
+        categories = get('https://in1.fylehq.com/platform/v1beta/admin/categories')
       end,
       output_fields: lambda do |object_definitions|
         [
           {
-            name: "data",
-            label: "Categories",
+            name: 'data',
+            label: 'Categories',
             type: :array,
             of: :object,
-            properties: object_definitions["category"]
+            properties: object_definitions['category']
           }
         ]
       end
@@ -895,35 +890,70 @@
       output_fields: lambda do |object_definitions|
         [
           {
-            name: "data",
-            label: "Expenses",
+            name: 'data',
+            label: 'Expenses',
             type: :array,
             of: :object,
-            properties: object_definitions["expense"]
+            properties: object_definitions['expense']
           }
         ]
       end
     },
     get_list_of_cost_centers: {
-        execute: lambda do |connection, input|
-          categories = get("https://staging.fyle.tech/platform/v1beta/admin/cost_centers")
-        end,
-        output_fields: lambda do |object_definitions|
-          [
-            {
-              name: "data",
-              label: "Cost Centers",
-              type: :array,
-              of: :object,
-              properties: object_definitions["cost_center"]
-            }
-          ]
-        end
+      execute: lambda do |connection, input|
+        categories = get('https://in1.fylehq.com/platform/v1beta/admin/cost_centers')
+      end,
+      output_fields: lambda do |object_definitions|
+        [
+          {
+            name: 'data',
+            label: 'Cost Centers',
+            type: :array,
+            of: :object,
+            properties: object_definitions['cost_center']
+          }
+        ]
+      end
     },
-    
+    upload_to_fyle: {
+      input_fields: lambda do
+        [
+          {
+            "name": "limeitem_data",
+            "type": "array",
+            "of": "object",
+            "label": "Rows",
+            "properties": [
+              {
+                "control_type": "text",
+                "label": "Object ID",
+                "type": "string",
+                "name": "object_id"
+              },
+              {
+                "control_type": "text",
+                "label": "Object type",
+                "type": "string",
+                "name": "object_type"
+              },
+              {
+                "control_type": "text",
+                "label": "Reference",
+                "type": "string",
+                "name": "reference"
+              }
+            ]
+          }
+        ]
+      end,
+      
+      execute: lambda do |connection, input_fields|
+        add_accounting_export = call(:upload_accounting_export, input_fields) 
+      end
+    }
  },
   triggers: {
-    poll_cost_center: {
+    new_updated_cost_center: {
       title: 'New/Updated Cost Center',
 
       subtitle: "Triggers when a Cost Center is created or " \
@@ -960,11 +990,10 @@
         updated_since = (closure['cursor'] || input['since'] || Time.now ).to_time.utc.iso8601
         
 
-        cost_center = get("https://staging.fyle.tech/platform/v1beta/admin/cost_centers").
+        cost_center = get('https://in1.fylehq.com/platform/v1beta/admin/cost_centers').
                   params(
                     'order': 'updated_at.asc',
                   )
-  
         closure['cursor'] = cost_center['data'].last['updated_at'] unless cost_center.blank?
         
         {
@@ -981,30 +1010,31 @@
        output_fields: lambda do |object_definitions|
           [
             {
-              name: "data",
-              label: "Cost Centers",
+              name: 'data',
+              label: 'Cost Centers',
               type: :array,
               of: :object,
-              properties: object_definitions["cost_center"]
+              properties: object_definitions['cost_center']
             }
           ]
       end
-    },  
-    poll_expenses: {
+    },
+
+    new_expenses: {
       title: 'New/Updated Expense',
 
       subtitle: "Triggers when a expense is created or " \
       "updated in Fyle",
       
       description: lambda do |input, picklist_label|
-        "New/updated <span class='provider'>Cost Center</span> " \
+        "New <span class='provider'>Expense</span> " \
         "in <span class='provider'>Fyle</span>"
       end,
 
-      help: "Creates a job when cost centers are created or " \
-      "updated in Fyle. Each cost center creates a separate job.",
-      
-      input_fields: lambda do |object_definitions|
+      help: "Creates a job when Expense are created " \
+      "in Fyle. Each expense creates a separate job.",
+ 
+      input_fields: lambda do
         [
           {
             name: 'since',
@@ -1015,10 +1045,30 @@
             hint: 'When you start recipe for the first time, it picks up ' \
               'trigger events from this specified date and time. Defaults to ' \
               'the current time.'
+          },
+          { 
+            name: 'state', 
+            type: :string, 
+            optional: false 
+          },
+          {
+            name: 'order',
+            type: :string,
+            optional: false
+          },
+          {
+            name: 'updated_at',
+            type: :string,
+            optional: false
+          },
+          {
+            name: 'exported',
+            type: :string,
+            optional: false
           }
         ]
       end,
-      
+ 
       poll: lambda do |connection, input, closure, _eis, _eos|
         
         closure = {} unless closure.present?
@@ -1027,7 +1077,7 @@
         updated_since = (closure['cursor'] || input['since'] || Time.now ).to_time.utc.iso8601
         
 
-        expenses = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").
+        expenses = get('https://in1.fylehq.com/platform/v1beta/admin/expenses').
                   params(
                     'state': 'eq.PAYMENT_PROCESSING',
                     'order': 'updated_at.asc'
@@ -1049,11 +1099,11 @@
        output_fields: lambda do |object_definitions|
           [
             {
-              name: "data",
-              label: "Expense",
+              name: 'data',
+              label: 'Expense',
               type: :array,
               of: :object,
-              properties: object_definitions["expense"]
+              properties: object_definitions['expense']
             }
           ]
       end
@@ -1092,7 +1142,7 @@
           category_id: expense['category_id'],
           category_name: expense['category'] ? expense['category']['name'] : nil,
           sub_category: expense['category'] ? expense['category']['sub_category'] : nil,
-          categor_code: expense['category'] ? expense['category']['code'] : nil,
+          category_code: expense['category'] ? expense['category']['code'] : nil,
           project_id: expense['project_id'],
           project_name: expense['project'] ? expense['project']['name'] : nil,
           project_code: expense['project'] ? expense['project']['code'] : nil,
@@ -1104,7 +1154,7 @@
           is_billable: expense['is_billable'],
           is_reimbursable: expense['is_reimbursable'],
           state: expense['state'],
-          expense_number: expense['seq_num'],
+          seq_num: expense['seq_num'],
           added_to_report_at: expense['added_to_report_at'],
           report_id: expense['report_id'],
           report_last_approved_at: expense['report'] ? expense['report']['last_approved_at'] : nil,
@@ -1134,6 +1184,70 @@
         data: flattened_expenses
       }
     end,
+
+    upload_accounting_export: lambda do |input_fields|
+      user_profile = call(:get_user_profile) 
+
+      file_payload = {
+        "data": {
+          "name": 'Test Fyle Name',
+          "type": "INTEGRATION",
+          "password": nil,
+          "user_id": user_profile['id']
+        }
+      }
+
+      type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+      file_obj = post('https://in1.fylehq.com/platform/v1beta/admin/files', file_payload)
+
+      file_id = file_obj['data']['id']
+
+      if input_fields['limeitem_data']
+        accounting_exports_payload =   {
+          "data": {
+            "file_ids": [
+              file_id
+            ],
+            "exported_at": Time.now(),
+            "description": "TST Foundation CSV Export - 2",
+            "name": "TST Foundation CSV Export"
+          }
+        }
+        accounting_export = post('https://in1.fylehq.com/platform/v1beta/admin/accounting_exports', accounting_exports_payload)
+        accounting_export_id = accounting_export['data']['id']
+
+        input_fields['limeitem_data'].each_with_object({}) do |element, hash|
+          element[:accounting_export_id] = accounting_export_id
+        end
+
+        accounting_export_line_items_payload = {
+          "data": input_fields['limeitem_data']
+        }
+
+        accounting_export_lineitems = post('https://in1.fylehq.com/platform/v1beta/admin/accounting_export_lineitems/bulk', accounting_export_line_items_payload)
+        accounting_export_lineitems
+
+      end
+
+    end,
+    output_fields: lambda do |object_definitions|
+      [
+        {
+          name: 'data',
+          label: 'Expenses',
+          type: :array,
+          of: :object,
+          properties: object_definitions['user']
+        }
+      ]
+    end,
+    
+    get_user_profile: lambda do
+        user_profile = get('https://in1.fylehq.com/platform/v1beta/spender/my_profile')['data']['user']
+
+        user_profile
+    end,
     
     paginated_get_all: lambda do |input|
       count = 1
@@ -1141,11 +1255,14 @@
       results = []
       
       query_params = {
-        order: 'updated_at.asc'
+        order: input['order'],
+        state: input['state'],
+        is_exported: input['exported'],
+        updated_at: input['updated_at']
       }
 
       while total_count < count  do
-        response = get("https://staging.fyle.tech/platform/v1beta/admin/expenses").params(
+        response = get('https://in1.fylehq.com/platform/v1beta/admin/expenses').params(
           query_params
         )
         
@@ -1154,8 +1271,8 @@
         count = response['count']
         
         query_params = {
-           order: 'updated_at.asc',
-          
+           order: input['order'],
+           state: input['state'],
           'offset': total_count, 
           'limit': data_size
         }
@@ -1166,7 +1283,6 @@
       flattened_expenses = call(:flatten_expenses, results)
       
       flattened_expenses
-      
     end
       
   }
