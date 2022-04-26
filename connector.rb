@@ -1,6 +1,5 @@
 {
   title: 'Fyle Production',
- 
 
   # API key authentication example. See more examples at https://docs.workato.com/developing-connectors/sdk/guides/authentication.html
   connection: {
@@ -35,7 +34,6 @@
       refresh_on: [401, 403, '401 Authorization Required'],
  
       refresh: lambda do |connection, refresh_token|
-
         response = post('https://accounts.fylehq.com/api/oauth/token').
           payload(
             grant_type: 'refresh_token',
@@ -67,13 +65,67 @@
       fields: lambda do |connection, config_fields|
         [
           {
+            "control_type": "number",
+            "label": "ID",
+            "parse_output": "float_conversion",
+            "type": "number",
             "name": "id"
           },
           {
+            "control_type": "text",
+            "label": "Name",
+            "type": "string",
             "name": "name"
           },
           {
+            "control_type": "text",
+            "label": "Code",
+            "type": "string",
             "name": "code"
+          },
+          {
+            "control_type": "text",
+            "label": "Description",
+            "type": "string",
+            "name": "description"
+          },
+          {
+            "control_type": "text",
+            "label": "Is enabled",
+            "render_input": {},
+            "parse_output": {},
+            "toggle_hint": "Select from option list",
+            "toggle_field": {
+              "label": "Is enabled",
+              "control_type": "text",
+              "toggle_hint": "Use custom value",
+              "type": "boolean",
+              "name": "is_enabled"
+            },
+            "type": "boolean",
+            "name": "is_enabled"
+          },
+          {
+            "control_type": "text",
+            "label": "Org ID",
+            "type": "string",
+            "name": "org_id"
+          },
+          {
+            "control_type": "text",
+            "label": "Created at",
+            "render_input": "date_time_conversion",
+            "parse_output": "date_time_conversion",
+            "type": "date_time",
+            "name": "created_at"
+          },
+          {
+            "control_type": "text",
+            "label": "Updated at",
+            "render_input": "date_time_conversion",
+            "parse_output": "date_time_conversion",
+            "type": "date_time",
+            "name": "updated_at"
           }
         ]
       end
@@ -840,7 +892,6 @@
 
   actions: {
     get_list_of_categories: {
-    
       execute: lambda do |connection, input|
         categories = get('https://in1.fylehq.com/platform/v1beta/admin/categories')
       end,
@@ -856,8 +907,7 @@
         ]
       end
     },
-    get_list_of_expenses: {
-      
+    get_list_of_expenses: { 
       input_fields: lambda do
           [
             { 
@@ -953,19 +1003,18 @@
     },
     upload_categories_to_fyle: {
        execute: lambda do |connection|
-         fyle_payload = [
-         {
-           'name': 'Jhon Cena 11',
-           'code': 141199,
-           'enabled': true
-         }
-       ]
-         categories = get('https://in1.fylehq.com/platform/v1beta/admin/cost_centers')
-       
-       
+        fyle_payload = [
+          {
+            'name': 'Jhon Cena 11',
+            'code': 141199,
+            'enabled': true
+          }
+        ]
+        categories = get('https://in1.fylehq.com/platform/v1beta/admin/cost_centers')
       end
     }
- },
+  },
+
   triggers: {
     new_updated_cost_center: {
       title: 'New/Updated Cost Center',
@@ -1033,7 +1082,6 @@
           ]
       end
     },
-
     new_expenses: {
       title: 'New/Updated Expense',
 
@@ -1122,7 +1170,6 @@
           ]
       end
     },
-    
   },
 
   pick_lists: {
@@ -1198,7 +1245,6 @@
         data: flattened_expenses
       }
     end,
-
     upload_accounting_export: lambda do |input_fields|
       user_profile = call(:get_user_profile) 
 
@@ -1255,14 +1301,12 @@
           properties: object_definitions['user']
         }
       ]
-    end,
-    
+    end,  
     get_user_profile: lambda do
         user_profile = get('https://in1.fylehq.com/platform/v1beta/spender/my_profile')['data']['user']
 
         user_profile
     end,
-    
     paginated_get_all: lambda do |input|
       count = 1
       total_count = 0
@@ -1298,6 +1342,5 @@
       
       flattened_expenses
     end
-      
   }
 }
