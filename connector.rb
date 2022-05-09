@@ -5,7 +5,7 @@
       type: "oauth2",
 
       authorization_url: lambda do
-        "https://accounts.fyle.tech/app/developers/%23/oauth/authorize"
+        "https://app.fyle.tech/app/developers/%23/oauth/authorize"
       end,
 
       token_url: lambda do
